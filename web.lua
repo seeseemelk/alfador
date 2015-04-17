@@ -30,7 +30,27 @@ while true do
 		end
 	until not client
 
+	local i = 1
+	local v
 
+	while i <= #connections do
+		v = connections[i]
+		success, err = coroutine.resume(v[1], v[2])
+		if coroutine.status(v[1]) == "dead" then
+			if not success then
+				print("Error: " .. err)
+			end
+
+			connections[i] = connections[#connections]
+			connections[#connections] = nil
+			i = i - 1
+
+			v[2]:close()
+		end
+		i = i + 1
+	end
+
+	--[[
 	local toRemove = {}
 
 	for i, v in ipairs(connections) do
@@ -48,6 +68,7 @@ while true do
 	for i, v in ipairs(toRemove) do
 		table.remove(connections, v)
 	end
+	--]]
 
 	socket.sleep(0)
 end

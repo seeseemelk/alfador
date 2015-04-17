@@ -41,10 +41,13 @@ function initialHandler(client)
 		if requestType == "POST" then
 			print("Got POST request")
 			local data = client:receive(httpHeaders["Content-Length"])
-			if data then
-				print("Data: " .. data)
+			data = data .. "&"
+			for name, value in data:gmatch("(.-)=(.-)&") do
+				value = value:gsub("+", " ")
+				print(name .. " = " .. value)
+				value = isNumber(value) or value
+				GET[name] = value
 			end
-			forceCode = forceCode or 415
 		end
 
 		-- Load cookies
@@ -77,19 +80,6 @@ function initialHandler(client)
 			code = forceCode or code
 
 			if firstLoop then
-				-- Send status code
-				--[[if code == 200 then
-					client:send(version .. " 200 OK\n")
-				elseif code == 404 then
-					client:send(version .. " 404 Not Found\n")
-				elseif code == 418 then
-					client:send(version .. " 418 Unsupported Media Type\n")
-				elseif code == 500 then
-					client:send(version .. " 500 Internal Server Error\n")
-				else
-					print("Unknown code " .. code)
-					client:send(version .. " " .. code)
-				end--]]
 				client:send(version .. " " .. code .. " " .. statusCodes[code])
 
 				-- Send header fields
