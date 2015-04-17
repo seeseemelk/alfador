@@ -1,0 +1,179 @@
+local global = {}
+local mimetypes = require("mimetypes")
+
+function getMimeType(path)
+	return mimetypes.guess(path)
+end
+
+function resolveURL(url)
+	local file = "./www"
+
+	url:gsub("[/\\]%.%.", "")
+	url:gsub("[/\\]%.", "")
+
+	if url == "/" then
+		file = file .. "/index.html"
+	else
+		file = file .. url
+	end
+
+	local filehandle = io.open(file)
+	local hasFile = filehandle and true or false
+	if filehandle then filehandle:close() end
+
+	return file, hasFile
+end
+
+function getLuaLocations(page)
+	local locations = {}
+
+	local lastEnd = nil
+
+	repeat
+		local s1 = string.find(page, "<%?lua", lastEnd)
+		local _, e2 = string.find(page, "lua%?>", lastEnd)
+		lastEnd = e2 or #page
+
+		if s1 then
+			locations[#locations + 1] = {s1, e2}
+		end
+
+	until not s1
+
+	return locations
+end
+
+function prepareLuaCode(page)
+	local locations = getLuaLocations(page)
+
+	local lastEnd = locations[#locations][2]
+	locations[#locations + 1] = {#page, #page}
+
+	local pageData = {}
+	local luaData = {}
+	local lastEnd = 1
+	for i, v in ipairs(locations) do
+		pageData[#pageData + 1] = page:sub(lastEnd, v[1] - 1)
+		lastEnd = v[2] + 1
+		luaData[#luaData + 1] = "needPagePart(" .. #pageData .. ")"
+		luaData[#luaData + 1] = page:sub(v[1]+5, v[2]-5)
+	end
+
+	return pageData, table.concat(luaData, "\n")
+end
+
+function parsePage(file)
+	local fh = assert(io.open(file))
+	local data = fh:read("*all")
+	fh:close()
+
+	return prepareLuaCode(data)
+end
+
+function loadPage(env, file)
+	local html, lua = parsePage(file)
+
+	local buffer = {}
+
+	local headers = {}
+
+	lua = loadstring(lua)
+	setfenv(lua, env)
+
+	env.needPagePart = function(n)
+		buffer[#buffer + 1] = html[n]
+	end
+
+	env.print = function(data)
+		buffer[#buffer + 1] = tostring(data)
+	end
+
+	env.require = function(page)
+		if not page:find("^/") then
+			page = "/" .. page
+		end
+
+		local tempBuffer = loadPage(env, resolveURL(page))
+		buffer[#buffer + 1] = tempBuffer
+	end
+
+	env.setHeader = function(name, value)
+		headers[name] = value
+	end
+
+	local success, err = pcall(lua)
+
+	if not success then
+		buffer[#buffer + 1] = "<br>Lua Error: " .. tostring(err) .. "<br>"
+	end
+
+	return table.concat(buffer), headers
+end
+
+local env = {
+	tonumber = tonumber,
+	tostring = tostring,
+	pcall = pcall,
+	xpcall = xpcall,
+	setmetatable = setmetatable,
+	getmetatable = getmetatable,
+	string = class(string),
+	math = class(math),
+	class = class,
+	global = global
+}
+
+function handleRequest(client, requestType, url, httpVersion, options)
+	coroutine.yield()
+	local file, found = resolveURL(url)
+	print("Request url: " .. file)
+	
+	local contentType, data, header
+
+	if found then
+		local newEnv = class(env)
+		contentType = getMimeType(resolveURL(url))
+		data, header = loadPage(newEnv, file)
+
+		client:send("HTTP/1.1 200 OK\n")
+	else
+		client:send("HTTP/1.1 404 Not Found\n")
+	end
+
+	if not header["Content-Length"] then
+		header["Content-Length"] = #data
+	end
+	if not header["Content-Type"] then
+		header["Content-Type"] = contentType;
+	end
+	print("Content type: " .. tostring(header["Content-Type"]))
+
+	for i, v in ipairs(header) do
+		client:send(i .. ": " .. v)
+	end
+
+	client:send("\n")
+	client:send(data)
+	client:close()
+end
+
+return function(client)
+	-- A client has connected
+	print("Client connected")
+
+	-- Get request info from client
+	local requestType, url, httpVersion = string.match(client:receive("*l"), "^(.-)%s(.-)%s(.-)$")
+	print(requestType, url, httpVersion)
+
+	local options = {}
+
+	repeat
+		local key, value = string.match(client:receive("*l"), "^(.-): (.-)$")
+		--print(key .. ": " .. value)
+		if key then
+			options[key] = value
+		end
+	until not key
+
+	handleRequest(client, requestType, url, httpVersion, options)
+end
