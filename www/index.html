@@ -1,0 +1,15 @@
+Cookie test
+<?lua
+
+cookies["session"] = 123
+
+if not cookies["mycookie"] then
+	print("Cookie not yet set\n")
+	cookies["mycookie"] = math.floor(math.random() * 1000)
+else
+	print("Found cookie!\n")
+end
+
+print("Cookie set to: " .. cookies["mycookie"])
+
+lua?>

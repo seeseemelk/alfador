@@ -1,0 +1,31 @@
+<html>
+	<head>
+		<title>Check cookie</title>
+	</head>
+	<body>
+		<?lua
+		if GET["session"] == "start" then
+			startSession()
+		elseif GET["session"] == "stop" then
+			stopSession()
+		end
+
+		if session then
+			print("A session is started<br>")
+			for i, v in pairs(session) do
+				print(i .. " = " .. v .. "<br>")
+			end
+		else
+			print("No session is started<br>")
+		end
+
+		print("GET options:<br>")
+		for i, v in pairs(GET) do
+			print(i .. " = " .. v .. "<br>")
+		end
+		lua?>
+		<a href="session.html">Refresh without GET</a></br>
+		<a href="session.html?session=start">Start session</a><br>
+		<a href="session.html?session=stop">Stop session</a>
+	</body>
+</html>

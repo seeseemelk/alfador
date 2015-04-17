@@ -1,0 +1,18 @@
+<html>
+	<head>
+		<title>TITLE</title>
+	</head>
+	<body>
+		<?lua
+		print("Other page")
+		lua?>
+		Some more text<br>
+		<?lua
+
+		print("How are you doing?<br>")
+		global.nTimes = (global.nTimes or 0) + 1
+		print("This page has been visited " .. global.nTimes .. " times!")
+
+		lua?>
+	</body>
+</html>
